@@ -1,13 +1,130 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dompets    Dompet[]
+  transaksis Transaksi[]
+  kategoris  Kategori[]
+  anggarans  Anggaran[]
+  tabungans  Tabungan[]
+  hutangs    Hutang[]
+}
+
+model Dompet {
+  id        String   @id @default(cuid())
+  nama      String
+  saldo     Decimal  @default(0) @db.Decimal(15, 2)
+  icon      String?
+  warna     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaksis Transaksi[]
+  transferDari Transfer[] @relation("DompetAsal")
+  transferKe   Transfer[] @relation("DompetTujuan")
+}
+
+model Kategori {
+  id    String @id @default(cuid())
+  nama  String
+  icon  String?
+  warna String?
+  tipe  TipeTransaksi
+
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaksis Transaksi[]
+  anggarans  Anggaran[]
+}
+
+model Transaksi {
+  id          String        @id @default(cuid())
+  jumlah      Decimal       @db.Decimal(15, 2)
+  catatan     String?
+  tanggal     DateTime
+  tipe        TipeTransaksi
+  createdAt   DateTime      @default(now())
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dompetId   String
+  dompet     Dompet   @relation(fields: [dompetId], references: [id])
+  kategoriId String?
+  kategori   Kategori? @relation(fields: [kategoriId], references: [id])
+}
+
+model Transfer {
+  id        String   @id @default(cuid())
+  jumlah    Decimal  @db.Decimal(15, 2)
+  catatan   String?
+  tanggal   DateTime
+  createdAt DateTime @default(now())
+
+  dompetAsalId   String
+  dompetAsal     Dompet @relation("DompetAsal", fields: [dompetAsalId], references: [id])
+  dompetTujuanId String
+  dompetTujuan   Dompet @relation("DompetTujuan", fields: [dompetTujuanId], references: [id])
+}
+
+model Anggaran {
+  id     String @id @default(cuid())
+  jumlah Decimal @db.Decimal(15, 2)
+  bulan  Int
+  tahun  Int
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kategoriId String
+  kategori   Kategori @relation(fields: [kategoriId], references: [id])
+}
+
+model Tabungan {
+  id          String   @id @default(cuid())
+  nama        String
+  target      Decimal  @db.Decimal(15, 2)
+  terkumpul   Decimal  @default(0) @db.Decimal(15, 2)
+  deadline    DateTime?
+  createdAt   DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Hutang {
+  id          String      @id @default(cuid())
+  nama        String
+  jumlah      Decimal     @db.Decimal(15, 2)
+  sudahDibayar Decimal    @default(0) @db.Decimal(15, 2)
+  jatuhTempo  DateTime?
+  tipe        TipeHutang
+  catatan     String?
+  createdAt   DateTime    @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum TipeTransaksi {
+  PEMASUKAN
+  PENGELUARAN
+}
+
+enum TipeHutang {
+  HUTANG
+  PIUTANG
 }
