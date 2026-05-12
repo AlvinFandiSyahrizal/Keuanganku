@@ -7,11 +7,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { nama, icon, warna } = await req.json();
+  const { nama, icon, warna, saldo } = await req.json();
 
   const dompet = await prisma.dompet.updateMany({
     where: { id: params.id, userId: session.user.id },
-    data: { nama, icon, warna },
+    data: { nama, icon, warna, saldo },
   });
 
   return NextResponse.json(dompet);
