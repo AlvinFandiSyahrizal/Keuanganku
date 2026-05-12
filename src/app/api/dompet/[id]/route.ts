@@ -3,27 +3,46 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { nama, icon, warna, saldo } = await req.json();
+  try {
+    const { id } = await params;
+    const { nama, icon, warna, saldo } = await req.json();
 
-  const dompet = await prisma.dompet.updateMany({
-    where: { id: params.id, userId: session.user.id },
-    data: { nama, icon, warna, saldo },
-  });
+    await prisma.dompet.updateMany({
+      where: { id, userId: session.user.id },
+      data: { nama, icon, warna, saldo },
+    });
 
-  return NextResponse.json(dompet);
+    return NextResponse.json({ message: "Dompet diupdate" });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: "Gagal mengupdate dompet" }, { status: 500 });
+  }
 }
 
-export async function DELETE(_: Request, { params }: { params: { id: string } }) {
+export async function DELETE(
+  _: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  await prisma.dompet.deleteMany({
-    where: { id: params.id, userId: session.user.id },
-  });
+  try {
+    const { id } = await params;
 
-  return NextResponse.json({ message: "Dompet dihapus" });
+    await prisma.dompet.deleteMany({
+      where: { id, userId: session.user.id },
+    });
+
+    return NextResponse.json({ message: "Dompet dihapus" });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: "Gagal menghapus dompet" }, { status: 500 });
+  }
 }
