@@ -12,6 +12,8 @@ interface Transaksi {
   tipe: "PEMASUKAN" | "PENGELUARAN";
   dompet: Dompet;
   kategori: Kategori | null;
+  dompetId: string;
+  kategoriId: string | null;
 }
 
 export default function TransaksiPage() {
@@ -20,6 +22,7 @@ export default function TransaksiPage() {
   const [kategoris, setKategoris] = useState<Kategori[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editTarget, setEditTarget] = useState<Transaksi | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Transaksi | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -38,9 +41,9 @@ export default function TransaksiPage() {
       fetch("/api/dompet").then((r) => r.json()),
       fetch("/api/kategori").then((r) => r.json()),
     ]);
-    setTransaksis(t);
-    setDompets(d);
-    setKategoris(k);
+    setTransaksis(Array.isArray(t) ? t : []);
+    setDompets(Array.isArray(d) ? d : []);
+    setKategoris(Array.isArray(k) ? k : []);
     if (d.length > 0) setDompetId(d[0].id);
     setLoading(false);
   };
@@ -51,7 +54,19 @@ export default function TransaksiPage() {
     setJumlah(""); setCatatan(""); setTipe("PENGELUARAN");
     setTanggal(new Date().toISOString().split("T")[0]);
     setKategoriId(""); setShowForm(false); setError("");
+    setEditTarget(null);
     if (dompets.length > 0) setDompetId(dompets[0].id);
+  };
+
+  const openEdit = (t: Transaksi) => {
+    setEditTarget(t);
+    setTipe(t.tipe);
+    setJumlah(String(Number(t.jumlah)));
+    setCatatan(t.catatan || "");
+    setTanggal(new Date(t.tanggal).toISOString().split("T")[0]);
+    setDompetId(t.dompetId);
+    setKategoriId(t.kategoriId || "");
+    setShowForm(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,10 +74,20 @@ export default function TransaksiPage() {
     setSubmitting(true);
     setError("");
 
-    const res = await fetch("/api/transaksi", {
-      method: "POST",
+    const url = editTarget ? `/api/transaksi/${editTarget.id}` : "/api/transaksi";
+    const method = editTarget ? "PATCH" : "POST";
+
+    const res = await fetch(url, {
+      method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jumlah: parseFloat(jumlah), catatan, tanggal, tipe, dompetId, kategoriId: kategoriId || null }),
+      body: JSON.stringify({
+        jumlah: parseFloat(jumlah),
+        catatan,
+        tanggal,
+        tipe,
+        dompetId,
+        kategoriId: kategoriId || null,
+      }),
     });
 
     if (!res.ok) {
@@ -93,22 +118,18 @@ export default function TransaksiPage() {
     new Date(str).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
 
   const filteredKategori = kategoris.filter((k) => k.tipe === tipe);
-
   const totalPemasukan = transaksis.filter((t) => t.tipe === "PEMASUKAN").reduce((a, t) => a + Number(t.jumlah), 0);
   const totalPengeluaran = transaksis.filter((t) => t.tipe === "PENGELUARAN").reduce((a, t) => a + Number(t.jumlah), 0);
 
   return (
     <div>
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-gray-800">Transaksi</h1>
           <p className="text-sm text-gray-500 mt-0.5">Catat pemasukan & pengeluaran kamu</p>
         </div>
-        <button
-          onClick={() => { resetForm(); setShowForm(true); }}
-          className="flex items-center gap-2 bg-[#4B0082] text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#3a0066] transition"
-        >
+        <button onClick={() => { resetForm(); setShowForm(true); }}
+          className="flex items-center gap-2 bg-[#4B0082] text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#3a0066] transition">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
@@ -116,7 +137,6 @@ export default function TransaksiPage() {
         </button>
       </div>
 
-      {/* Summary */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className="bg-green-50 rounded-xl p-4">
           <p className="text-xs text-green-700 font-medium">Total Pemasukan</p>
@@ -128,7 +148,6 @@ export default function TransaksiPage() {
         </div>
       </div>
 
-      {/* List */}
       {loading ? (
         <p className="text-sm text-gray-400 text-center py-10">Memuat...</p>
       ) : transaksis.length === 0 ? (
@@ -155,10 +174,16 @@ export default function TransaksiPage() {
                   {t.catatan && <p className="text-xs text-gray-400">{t.catatan}</p>}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <p className={`text-sm font-semibold ${t.tipe === "PEMASUKAN" ? "text-green-600" : "text-red-500"}`}>
+              <div className="flex items-center gap-1">
+                <p className={`text-sm font-semibold mr-1 ${t.tipe === "PEMASUKAN" ? "text-green-600" : "text-red-500"}`}>
                   {t.tipe === "PEMASUKAN" ? "+" : "-"}{formatRupiah(Number(t.jumlah))}
                 </p>
+                <button onClick={() => openEdit(t)}
+                  className="p-1.5 rounded-lg text-gray-300 hover:bg-gray-100 hover:text-gray-500 transition">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
                 <button onClick={() => setDeleteTarget(t)}
                   className="p-1.5 rounded-lg text-gray-300 hover:bg-red-50 hover:text-red-400 transition">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -171,12 +196,14 @@ export default function TransaksiPage() {
         </div>
       )}
 
-      {/* Modal Form Tambah */}
+      {/* Modal Form Tambah/Edit */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="font-semibold text-gray-800">Tambah Transaksi</h2>
+              <h2 className="font-semibold text-gray-800">
+                {editTarget ? "Edit Transaksi" : "Tambah Transaksi"}
+              </h2>
               <button onClick={resetForm} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -187,15 +214,14 @@ export default function TransaksiPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
 
-              {/* Tipe toggle */}
               <div className="flex rounded-lg border border-gray-200 p-1 gap-1">
-                {(["PENGELUARAN", "PEMASUKAN"] as const).map((t) => (
-                  <button key={t} type="button" onClick={() => { setTipe(t); setKategoriId(""); }}
+                {(["PENGELUARAN", "PEMASUKAN"] as const).map((tp) => (
+                  <button key={tp} type="button" onClick={() => { setTipe(tp); setKategoriId(""); }}
                     className={`flex-1 py-2 rounded-md text-sm font-medium transition
-                      ${tipe === t
-                        ? t === "PEMASUKAN" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+                      ${tipe === tp
+                        ? tp === "PEMASUKAN" ? "bg-green-500 text-white" : "bg-red-500 text-white"
                         : "text-gray-500 hover:bg-gray-50"}`}>
-                    {t === "PEMASUKAN" ? "Pemasukan" : "Pengeluaran"}
+                    {tp === "PEMASUKAN" ? "Pemasukan" : "Pengeluaran"}
                   </button>
                 ))}
               </div>
@@ -218,7 +244,9 @@ export default function TransaksiPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Kategori <span className="text-gray-400">(opsional)</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Kategori <span className="text-gray-400">(opsional)</span>
+                </label>
                 <select value={kategoriId} onChange={(e) => setKategoriId(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
                   <option value="">Tanpa kategori</option>
@@ -235,7 +263,9 @@ export default function TransaksiPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Catatan <span className="text-gray-400">(opsional)</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Catatan <span className="text-gray-400">(opsional)</span>
+                </label>
                 <input type="text" value={catatan} onChange={(e) => setCatatan(e.target.value)}
                   placeholder="cth: makan siang, gaji, dll"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
@@ -243,7 +273,7 @@ export default function TransaksiPage() {
 
               <button type="submit" disabled={submitting}
                 className="w-full bg-[#4B0082] text-white font-medium py-2.5 rounded-lg text-sm hover:bg-[#3a0066] transition disabled:opacity-50">
-                {submitting ? "Menyimpan..." : "Simpan Transaksi"}
+                {submitting ? "Menyimpan..." : editTarget ? "Simpan Perubahan" : "Simpan Transaksi"}
               </button>
             </form>
           </div>
@@ -261,7 +291,7 @@ export default function TransaksiPage() {
             </div>
             <h3 className="font-semibold text-gray-800 text-center mb-1">Hapus Transaksi?</h3>
             <p className="text-sm text-gray-500 text-center mb-6">
-              Saldo dompet <span className="font-medium text-gray-700">{deleteTarget.dompet.nama}</span> akan dikembalikan secara otomatis.
+              Saldo dompet <span className="font-medium text-gray-700">{deleteTarget.dompet.nama}</span> akan dikembalikan otomatis.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setDeleteTarget(null)}
