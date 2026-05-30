@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 
 interface Dompet { id: string; nama: string; icon: string; }
 interface Kategori { id: string; nama: string; icon: string; tipe: string; }
@@ -11,8 +11,8 @@ interface Transaksi {
   tanggal: string;
   tipe: "PEMASUKAN" | "PENGELUARAN";
   dompet: Dompet;
-  kategori: Kategori | null;
   dompetId: string;
+  kategori: Kategori | null;
   kategoriId: string | null;
 }
 
@@ -22,18 +22,27 @@ export default function TransaksiPage() {
   const [kategoris, setKategoris] = useState<Kategori[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showFilter, setShowFilter] = useState(false);
   const [editTarget, setEditTarget] = useState<Transaksi | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Transaksi | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // Form state
   const [tipe, setTipe] = useState<"PEMASUKAN" | "PENGELUARAN">("PENGELUARAN");
   const [jumlah, setJumlah] = useState("");
   const [catatan, setCatatan] = useState("");
   const [tanggal, setTanggal] = useState(new Date().toISOString().split("T")[0]);
   const [dompetId, setDompetId] = useState("");
   const [kategoriId, setKategoriId] = useState("");
+
+  // Filter state
+  const [filterTipe, setFilterTipe] = useState<"SEMUA" | "PEMASUKAN" | "PENGELUARAN">("SEMUA");
+  const [filterDompet, setFilterDompet] = useState("");
+  const [filterKategori, setFilterKategori] = useState("");
+  const [filterDari, setFilterDari] = useState("");
+  const [filterSampai, setFilterSampai] = useState("");
 
   const fetchAll = async () => {
     const [t, d, k] = await Promise.all([
@@ -56,6 +65,11 @@ export default function TransaksiPage() {
     setKategoriId(""); setShowForm(false); setError("");
     setEditTarget(null);
     if (dompets.length > 0) setDompetId(dompets[0].id);
+  };
+
+  const resetFilter = () => {
+    setFilterTipe("SEMUA"); setFilterDompet("");
+    setFilterKategori(""); setFilterDari(""); setFilterSampai("");
   };
 
   const openEdit = (t: Transaksi) => {
@@ -81,12 +95,8 @@ export default function TransaksiPage() {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        jumlah: parseFloat(jumlah),
-        catatan,
-        tanggal,
-        tipe,
-        dompetId,
-        kategoriId: kategoriId || null,
+        jumlah: parseFloat(jumlah), catatan, tanggal, tipe,
+        dompetId, kategoriId: kategoriId || null,
       }),
     });
 
@@ -111,53 +121,165 @@ export default function TransaksiPage() {
     setDeleting(false);
   };
 
+  // Filter logic
+  const filtered = useMemo(() => {
+    return transaksis.filter((t) => {
+      if (filterTipe !== "SEMUA" && t.tipe !== filterTipe) return false;
+      if (filterDompet && t.dompetId !== filterDompet) return false;
+      if (filterKategori && t.kategoriId !== filterKategori) return false;
+      if (filterDari && new Date(t.tanggal) < new Date(filterDari)) return false;
+      if (filterSampai && new Date(t.tanggal) > new Date(filterSampai + "T23:59:59")) return false;
+      return true;
+    });
+  }, [transaksis, filterTipe, filterDompet, filterKategori, filterDari, filterSampai]);
+
+  const isFiltered = filterTipe !== "SEMUA" || filterDompet || filterKategori || filterDari || filterSampai;
+
+  const totalPemasukan = filtered.filter((t) => t.tipe === "PEMASUKAN").reduce((a, t) => a + Number(t.jumlah), 0);
+  const totalPengeluaran = filtered.filter((t) => t.tipe === "PENGELUARAN").reduce((a, t) => a + Number(t.jumlah), 0);
+  const filteredKategoriForm = kategoris.filter((k) => k.tipe === tipe);
+
   const formatRupiah = (angka: number) =>
     new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(angka);
 
   const formatTanggal = (str: string) =>
     new Date(str).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
 
-  const filteredKategori = kategoris.filter((k) => k.tipe === tipe);
-  const totalPemasukan = transaksis.filter((t) => t.tipe === "PEMASUKAN").reduce((a, t) => a + Number(t.jumlah), 0);
-  const totalPengeluaran = transaksis.filter((t) => t.tipe === "PENGELUARAN").reduce((a, t) => a + Number(t.jumlah), 0);
-
   return (
     <div>
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-gray-800">Transaksi</h1>
           <p className="text-sm text-gray-500 mt-0.5">Catat pemasukan & pengeluaran kamu</p>
         </div>
-        <button onClick={() => { resetForm(); setShowForm(true); }}
-          className="flex items-center gap-2 bg-[#4B0082] text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#3a0066] transition">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Tambah
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowFilter(!showFilter)}
+            className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition
+              ${isFiltered
+                ? "bg-purple-50 border-purple-300 text-purple-700"
+                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+            </svg>
+            Filter {isFiltered && <span className="w-2 h-2 rounded-full bg-purple-600 inline-block" />}
+          </button>
+          <button onClick={() => { resetForm(); setShowForm(true); }}
+            className="flex items-center gap-2 bg-[#4B0082] text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#3a0066] transition">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Tambah
+          </button>
+        </div>
       </div>
 
+      {/* Panel Filter */}
+      {showFilter && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 mb-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-gray-700">Filter Transaksi</p>
+            {isFiltered && (
+              <button onClick={resetFilter}
+                className="text-xs text-red-500 hover:underline">Reset filter</button>
+            )}
+          </div>
+
+          {/* Tipe */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">Tipe</label>
+            <div className="flex gap-2">
+              {(["SEMUA", "PEMASUKAN", "PENGELUARAN"] as const).map((t) => (
+                <button key={t} onClick={() => setFilterTipe(t)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition
+                    ${filterTipe === t
+                      ? "bg-[#4B0082] text-white border-[#4B0082]"
+                      : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>
+                  {t === "SEMUA" ? "Semua" : t === "PEMASUKAN" ? "Pemasukan" : "Pengeluaran"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Dompet */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Dompet</label>
+              <select value={filterDompet} onChange={(e) => setFilterDompet(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
+                <option value="">Semua dompet</option>
+                {dompets.map((d) => (
+                  <option key={d.id} value={d.id}>{d.icon} {d.nama}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Kategori */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Kategori</label>
+              <select value={filterKategori} onChange={(e) => setFilterKategori(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
+                <option value="">Semua kategori</option>
+                {kategoris.map((k) => (
+                  <option key={k.id} value={k.id}>{k.icon} {k.nama}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Dari */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Dari tanggal</label>
+              <input type="date" value={filterDari} onChange={(e) => setFilterDari(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+            </div>
+
+            {/* Sampai */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Sampai tanggal</label>
+              <input type="date" value={filterSampai} onChange={(e) => setFilterSampai(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Summary */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className="bg-green-50 rounded-xl p-4">
-          <p className="text-xs text-green-700 font-medium">Total Pemasukan</p>
+          <p className="text-xs text-green-700 font-medium">
+            {isFiltered ? "Pemasukan (filter)" : "Total Pemasukan"}
+          </p>
           <p className="text-lg font-semibold text-green-700 mt-1">{formatRupiah(totalPemasukan)}</p>
         </div>
         <div className="bg-red-50 rounded-xl p-4">
-          <p className="text-xs text-red-700 font-medium">Total Pengeluaran</p>
+          <p className="text-xs text-red-700 font-medium">
+            {isFiltered ? "Pengeluaran (filter)" : "Total Pengeluaran"}
+          </p>
           <p className="text-lg font-semibold text-red-700 mt-1">{formatRupiah(totalPengeluaran)}</p>
         </div>
       </div>
 
+      {/* Jumlah hasil filter */}
+      {isFiltered && (
+        <p className="text-xs text-gray-400 mb-3">
+          Menampilkan <span className="font-medium text-gray-600">{filtered.length}</span> dari {transaksis.length} transaksi
+        </p>
+      )}
+
+      {/* List */}
       {loading ? (
         <p className="text-sm text-gray-400 text-center py-10">Memuat...</p>
-      ) : transaksis.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
-          <p className="text-4xl mb-3">📋</p>
-          <p className="text-sm">Belum ada transaksi. Catat sekarang!</p>
+          <p className="text-4xl mb-3">{isFiltered ? "🔍" : "📋"}</p>
+          <p className="text-sm">{isFiltered ? "Tidak ada transaksi yang sesuai filter." : "Belum ada transaksi."}</p>
+          {isFiltered && (
+            <button onClick={resetFilter} className="text-xs text-purple-600 mt-2 hover:underline">Reset filter</button>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
-          {transaksis.map((t) => (
+          {filtered.map((t) => (
             <div key={t.id} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg
@@ -250,7 +372,7 @@ export default function TransaksiPage() {
                 <select value={kategoriId} onChange={(e) => setKategoriId(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
                   <option value="">Tanpa kategori</option>
-                  {filteredKategori.map((k) => (
+                  {filteredKategoriForm.map((k) => (
                     <option key={k.id} value={k.id}>{k.icon} {k.nama}</option>
                   ))}
                 </select>
