@@ -3,16 +3,24 @@
 import { useEffect, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend,
+  ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell,
 } from "recharts";
 
 interface BulanData { bulan: string; pemasukan: number; pengeluaran: number; }
 interface KategoriData { nama: string; total: number; }
+interface TransaksiRow {
+  tanggal: string; tipe: string; kategori: string;
+  dompet: string; jumlah: number; catatan: string;
+}
 
 const WARNA_PIE = ["#4B0082", "#7C3AED", "#2563EB", "#059669", "#D97706"];
+const NAMA_BULAN = [
+  "Januari","Februari","Maret","April","Mei","Juni",
+  "Juli","Agustus","September","Oktober","November","Desember",
+];
 
-const formatRupiah = (angka: number) =>
-  new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(angka);
+const formatRupiah = (n: number) =>
+  new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
 
 const formatSingkat = (value: number) => {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}jt`;
@@ -21,10 +29,16 @@ const formatSingkat = (value: number) => {
 };
 
 export default function LaporanPage() {
+  const now = new Date();
   const [bulanan, setBulanan] = useState<BulanData[]>([]);
   const [topKategori, setTopKategori] = useState<KategoriData[]>([]);
   const [loading, setLoading] = useState(true);
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
+  const [exportBulan, setExportBulan] = useState(now.getMonth() + 1);
+  const [exportTahun, setExportTahun] = useState(now.getFullYear());
+  const [exporting, setExporting] = useState(false);
+
+  const tahunOptions = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1];
 
   useEffect(() => {
     fetch("/api/transaksi/summary")
@@ -38,6 +52,145 @@ export default function LaporanPage() {
 
   const bulanIni = bulanan[bulanan.length - 1];
   const selisih = bulanIni ? bulanIni.pemasukan - bulanIni.pengeluaran : 0;
+
+  const fetchExportData = async () => {
+    const res = await fetch(`/api/laporan/export?bulan=${exportBulan}&tahun=${exportTahun}`);
+    return await res.json();
+  };
+
+  const exportCSV = async () => {
+    setExporting(true);
+    try {
+      const data = await fetchExportData();
+      const { rows, summary, periode } = data;
+
+      const header = ["Tanggal", "Tipe", "Kategori", "Dompet", "Jumlah", "Catatan"];
+      const csvRows = [
+        `Laporan Keuangan - ${NAMA_BULAN[periode.bulan - 1]} ${periode.tahun}`,
+        "",
+        header.join(","),
+        ...rows.map((r: TransaksiRow) =>
+          [r.tanggal, r.tipe, r.kategori, r.dompet, r.jumlah, `"${r.catatan}"`].join(",")
+        ),
+        "",
+        `Total Pemasukan,${summary.totalPemasukan}`,
+        `Total Pengeluaran,${summary.totalPengeluaran}`,
+        `Selisih,${summary.selisih}`,
+      ];
+
+      const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `laporan-${NAMA_BULAN[periode.bulan - 1].toLowerCase()}-${periode.tahun}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const exportPDF = async () => {
+    setExporting(true);
+    try {
+      const data = await fetchExportData();
+      const { rows, summary, periode } = data;
+
+      const { default: jsPDF } = await import("jspdf");
+      const { default: autoTable } = await import("jspdf-autotable");
+
+      const doc = new jsPDF();
+      const namaBulan = NAMA_BULAN[periode.bulan - 1];
+
+      // Header
+      doc.setFillColor(75, 0, 130);
+      doc.rect(0, 0, 210, 30, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text("Keuanganku", 14, 13);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Laporan Keuangan — ${namaBulan} ${periode.tahun}`, 14, 22);
+
+      // Summary boxes
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(9);
+
+      const boxes = [
+        { label: "Pemasukan", value: formatRupiah(summary.totalPemasukan), color: [5, 150, 105] as [number, number, number] },
+        { label: "Pengeluaran", value: formatRupiah(summary.totalPengeluaran), color: [220, 38, 38] as [number, number, number] },
+        { label: summary.selisih >= 0 ? "Surplus" : "Defisit", value: formatRupiah(Math.abs(summary.selisih)), color: [75, 0, 130] as [number, number, number] },
+      ];
+
+      boxes.forEach((box, i) => {
+        const x = 14 + i * 62;
+        doc.setFillColor(...box.color);
+        doc.roundedRect(x, 36, 58, 20, 3, 3, "F");
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(8);
+        doc.text(box.label, x + 4, 44);
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.text(box.value, x + 4, 51);
+        doc.setFont("helvetica", "normal");
+      });
+
+      // Tabel transaksi
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Detail Transaksi", 14, 68);
+
+      autoTable(doc, {
+        startY: 72,
+        head: [["Tanggal", "Tipe", "Kategori", "Dompet", "Jumlah", "Catatan"]],
+        body: rows.map((r: TransaksiRow) => [
+          r.tanggal,
+          r.tipe === "PEMASUKAN" ? "Pemasukan" : "Pengeluaran",
+          r.kategori,
+          r.dompet,
+          formatRupiah(r.jumlah),
+          r.catatan,
+        ]),
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [75, 0, 130], textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [248, 245, 255] },
+        columnStyles: {
+          0: { cellWidth: 22 },
+          1: { cellWidth: 24 },
+          2: { cellWidth: 28 },
+          3: { cellWidth: 28 },
+          4: { cellWidth: 32 },
+          5: { cellWidth: "auto" },
+        },
+        didParseCell: (hookData) => {
+          if (hookData.column.index === 1 && hookData.section === "body") {
+            const val = hookData.cell.raw as string;
+            hookData.cell.styles.textColor =
+              val === "Pemasukan" ? [5, 150, 105] : [220, 38, 38];
+          }
+        },
+      });
+
+      // Footer
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text(
+          `Keuanganku — Digenerate pada ${new Date().toLocaleDateString("id-ID")} — Halaman ${i} dari ${pageCount}`,
+          14,
+          doc.internal.pageSize.height - 8
+        );
+      }
+
+      doc.save(`laporan-${namaBulan.toLowerCase()}-${periode.tahun}.pdf`);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
@@ -84,6 +237,45 @@ export default function LaporanPage() {
         </div>
       )}
 
+      {/* Export Section */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-5">
+        <p className="text-sm font-semibold text-gray-700 mb-4">Export Laporan</p>
+        <div className="flex flex-wrap gap-3 items-end">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1.5">Bulan</label>
+            <select value={exportBulan} onChange={(e) => setExportBulan(Number(e.target.value))}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
+              {NAMA_BULAN.map((n, i) => (
+                <option key={i} value={i + 1}>{n}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1.5">Tahun</label>
+            <select value={exportTahun} onChange={(e) => setExportTahun(Number(e.target.value))}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
+              {tahunOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={exportCSV} disabled={exporting}
+              className="flex items-center gap-2 border border-gray-200 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition disabled:opacity-50">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              {exporting ? "..." : "CSV"}
+            </button>
+            <button onClick={exportPDF} disabled={exporting}
+              className="flex items-center gap-2 bg-[#4B0082] text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#3a0066] transition disabled:opacity-50">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              {exporting ? "..." : "PDF"}
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Grafik Bulanan */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
         <div className="flex items-center justify-between mb-5">
@@ -124,7 +316,6 @@ export default function LaporanPage() {
           )}
         </ResponsiveContainer>
 
-        {/* Legend */}
         <div className="flex gap-4 justify-center mt-3">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-full bg-green-600" />
@@ -137,12 +328,11 @@ export default function LaporanPage() {
         </div>
       </div>
 
-      {/* Top Kategori Pengeluaran */}
+      {/* Top Kategori */}
       {topKategori.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <p className="text-sm font-semibold text-gray-700 mb-5">Top Pengeluaran Bulan Ini</p>
           <div className="flex flex-col lg:flex-row gap-6 items-center">
-            {/* Pie Chart */}
             <div className="w-full lg:w-1/2">
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
@@ -156,8 +346,6 @@ export default function LaporanPage() {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-
-            {/* List */}
             <div className="w-full lg:w-1/2 space-y-3">
               {topKategori.map((k, i) => {
                 const total = topKategori.reduce((a, b) => a + b.total, 0);
