@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import NotifikasiDropdown from "@/components/layout/NotifikasiDropdown";
+import ThemeToggle from "@/components/layout/ThemeToggle";
 
 const menuItems = [
   {
@@ -105,79 +106,83 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex">
       {/* Overlay mobile */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 z-20 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/40 z-20 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
 
       {/* Sidebar */}
-      <aside
-        className={`fixed top-0 left-0 h-full w-64 bg-white border-r border-gray-100 z-30 flex flex-col transition-transform duration-300
-          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 lg:static lg:z-auto`}
-      >
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
-          <div className="w-8 h-8 rounded-lg bg-[#4B0082] flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-            </svg>
-          </div>
-          <span className="font-semibold text-gray-800 text-base">Keuanganku</span>
-        </div>
-
-        {/* Menu */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {menuItems.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors
-                  ${isActive
-                    ? "bg-[#4B0082] text-white"
-                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
-                  }`}
-              >
-                {item.icon}
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Logout */}
-        <div className="px-3 py-4 border-t border-gray-100">
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors w-full"
+        <aside
+            className={`fixed top-0 left-0 h-full w-64 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 z-30 flex flex-col transition-transform duration-300
+              ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 lg:static lg:z-auto`}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Keluar
-          </button>
-        </div>
-      </aside>
+            {/* Logo */}
+            <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 dark:border-gray-800">
+              <div className="w-8 h-8 rounded-lg bg-[#4B0082] flex items-center justify-center">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+              </div>
+              <span className="font-semibold text-gray-800 dark:text-white text-base">Keuanganku</span>
+            </div>
+
+            {/* Menu */}
+            <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+              {menuItems.map((item) => {
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setSidebarOpen(false)}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors
+                      ${isActive
+                        ? "bg-[#4B0082] text-white"
+                        : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-800 dark:hover:text-white"
+                      }`}
+                  >
+                    {item.icon}
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* Logout */}
+            <div className="px-3 py-4 border-t border-gray-100 dark:border-gray-800">
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-colors w-full"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Keluar
+              </button>
+            </div>
+          </aside>
 
       {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 bg-gray-50 dark:bg-gray-950">
         {/* Navbar — mobile & desktop */}
-        <header className="flex items-center justify-between px-4 lg:px-6 py-3 bg-white border-b border-gray-100 sticky top-0 z-10">
-          <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100 lg:hidden">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <span className="font-semibold text-gray-800 text-sm lg:hidden">Keuanganku</span>
-          <div className="hidden lg:block" />
-          <NotifikasiDropdown />
-        </header>
+          <header className="flex items-center justify-between px-4 lg:px-6 py-3 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 sticky top-0 z-10">
+            <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 lg:hidden">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <span className="font-semibold text-gray-800 dark:text-white text-sm lg:hidden">Keuanganku</span>
+            <div className="hidden lg:block" />
+            <div className="flex items-center gap-1">
+              <ThemeToggle />
+              <NotifikasiDropdown />
+            </div>
+          </header>
+
 
         {/* Konten halaman */}
         <main className="flex-1 p-4 lg:p-6">

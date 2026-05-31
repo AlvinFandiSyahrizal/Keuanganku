@@ -19,9 +19,17 @@ export default function NotifikasiDropdown() {
   const router = useRouter();
 
   useEffect(() => {
-    fetch("/api/notifikasi")
-      .then((r) => r.json())
-      .then((data) => setNotifs(Array.isArray(data) ? data : []));
+    const fetchNotif = () => {
+      fetch("/api/notifikasi")
+        .then((r) => r.json())
+        .then((data) => setNotifs(Array.isArray(data) ? data : []));
+    };
+
+    fetchNotif(); // fetch pertama saat mount
+
+    // Auto refresh setiap 60 detik
+    const interval = setInterval(fetchNotif, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   // Tutup dropdown saat klik di luar
