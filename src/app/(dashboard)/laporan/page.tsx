@@ -342,7 +342,7 @@ export default function LaporanPage() {
                       <Cell key={i} fill={WARNA_PIE[i % WARNA_PIE.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value: number) => formatRupiah(value)} />
+                  <Tooltip formatter={(value) => formatRupiah(Number(value))} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
